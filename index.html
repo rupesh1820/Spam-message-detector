@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SpamShield — AI Message Detector</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    /* ================================================
+       CSS Variables — Color Palette & Design Tokens
+       ================================================ */
+    :root {
+      --bg:         #0a0a0f;
+      --surface:    #12121a;
+      --surface2:   #1c1c28;
+      --border:     #2a2a3d;
+      --accent:     #ff3e6c;
+      --accent2:    #00e5a0;
+      --warn:       #ffb300;
+      --text:       #f0f0f8;
+      --muted:      #6b6b8a;
+      --glow-red:   rgba(255, 62, 108, 0.25);
+      --glow-green: rgba(0, 229, 160, 0.25);
+    }
+
+    /* ================================================
+       Reset & Base
+       ================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 2rem 1rem 4rem;
+      overflow-x: hidden;
+    }
+
+    /* Animated grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image:
+        linear-gradient(rgba(255,62,108,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,62,108,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ================================================
+       Layout Container
+       ================================================ */
+    .container {
+      width: 100%;
+      max-width: 720px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ================================================
+       Header
+       ================================================ */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      animation: fadeDown 0.6s ease both;
+    }
+
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.35rem 1rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--accent2);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 1.2rem;
+    }
+
+    .logo-badge::before {
+      content: '●';
+      color: var(--accent2);
+      animation: pulse 2s infinite;
+    }
+
+    h1 {
+      font-size: clamp(2.4rem, 6vw, 3.8rem);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -0.02em;
+    }
+
+    h1 span.highlight {
+      background: linear-gradient(135deg, var(--accent), #ff8a65);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .subtitle {
+      margin-top: 0.8rem;
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-weight: 400;
+    }
+
+    .accuracy-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 1rem;
+      background: rgba(0,229,160,0.1);
+      border: 1px solid rgba(0,229,160,0.3);
+      border-radius: 999px;
+      padding: 0.3rem 0.9rem;
+      font-family: 'Space Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--accent2);
+    }
+
+    /* ================================================
+       Main Card
+       ================================================ */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2rem;
+      position: relative;
+      overflow: hidden;
+      animation: fadeUp 0.7s ease 0.1s both;
+    }
+
+    .card::before {
+      content: '';
+      position: absolute;
+      top: -60px; right: -60px;
+      width: 200px; height: 200px;
+      background: var(--glow-red);
+      border-radius: 50%;
+      filter: blur(60px);
+      pointer-events: none;
+    }
+
+    /* ================================================
+       Textarea
+       ================================================ */
+    .input-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.6rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+    }
+
+    .char-count {
+      font-family: 'Space Mono', monospace;
+      font-size: 0.72rem;
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 140px;
+      background: var(--surface2);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem 1.1rem;
+      color: var(--text);
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      line-height: 1.6;
+      resize: vertical;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      outline: none;
+    }
+
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(255,62,108,0.12);
+    }
+
+    textarea::placeholder { color: var(--muted); }
+
+    /* ================================================
+       Buttons Row
+       ================================================ */
+    .btn-row {
+      display: flex;
+      gap: 0.8rem;
+      margin-top: 1.2rem;
+    }
+
+    .btn-check {
+      flex: 1;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 12px;
+      padding: 0.85rem 1.5rem;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.2s, background 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-check:hover {
+      background: #ff2257;
+      transform: translateY(-1px);
+      box-shadow: 0 8px 25px rgba(255,62,108,0.4);
+    }
+
+    .btn-check:active { transform: translateY(0); }
+
+    .btn-check.loading {
+      pointer-events: none;
+      background: #7a1b2f;
+    }
+
+    .btn-clear {
+      background: var(--surface2);
+      color: var(--muted);
+      border: 1.5px solid var(--border);
+      border-radius: 12px;
+      padding: 0.85rem 1.2rem;
+      font-family: 'Syne', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: color 0.2s, border-color 0.2s, background 0.2s;
+    }
+
+    .btn-clear:hover {
+      color: var(--text);
+      border-color: var(--muted);
+      background: var(--border);
+    }
+
+    /* Loading spinner inside button */
+    .spinner {
+      display: none;
+      width: 18px; height: 18px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto;
+    }
+
+    .btn-check.loading .btn-text { display: none; }
+    .btn-check.loading .spinner  { display: block; }
+
+    /* ================================================
+       Result Panel
+       ================================================ */
+    .result-panel {
+      margin-top: 1.5rem;
+      border-radius: 14px;
+      padding: 1.4rem 1.5rem;
+      display: none;
+      animation: popIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .result-panel.spam {
+      background: rgba(255,62,108,0.08);
+      border: 1.5px solid rgba(255,62,108,0.4);
+    }
+
+    .result-panel.ham {
+      background: rgba(0,229,160,0.08);
+      border: 1.5px solid rgba(0,229,160,0.35);
+    }
+
+    .result-panel.error {
+      background: rgba(255,179,0,0.08);
+      border: 1.5px solid rgba(255,179,0,0.35);
+    }
+
+    .result-header {
+      display: flex;
+      align-items: center;
+      gap: 0.7rem;
+      margin-bottom: 0.9rem;
+    }
+
+    .result-icon {
+      font-size: 1.8rem;
+      line-height: 1;
+    }
+
+    .result-verdict {
+      font-size: 1.35rem;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+    }
+
+    .result-panel.spam  .result-verdict { color: var(--accent); }
+    .result-panel.ham   .result-verdict { color: var(--accent2); }
+    .result-panel.error .result-verdict { color: var(--warn); }
+
+    /* Confidence meter */
+    .confidence-section { margin-top: 0.4rem; }
+
+    .conf-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 0.4rem;
+      font-family: 'Space Mono', monospace;
+    }
+
+    .conf-bar-track {
+      height: 6px;
+      background: var(--surface2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .conf-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+      width: 0;
+    }
+
+    .result-panel.spam .conf-bar-fill  { background: linear-gradient(90deg, #ff3e6c, #ff8a65); }
+    .result-panel.ham  .conf-bar-fill  { background: linear-gradient(90deg, #00e5a0, #00bcd4); }
+
+    /* Dual probability */
+    .prob-row {
+      display: flex;
+      gap: 0.7rem;
+      margin-top: 1rem;
+    }
+
+    .prob-chip {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.55rem 0.75rem;
+      text-align: center;
+    }
+
+    .prob-chip .prob-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.05rem;
+      font-weight: 700;
+      display: block;
+    }
+
+    .prob-chip .prob-lbl {
+      font-size: 0.7rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+    }
+
+    .prob-chip.spam-chip .prob-val { color: var(--accent); }
+    .prob-chip.ham-chip  .prob-val { color: var(--accent2); }
+
+    /* ================================================
+       Sample Messages Section
+       ================================================ */
+    .samples-section {
+      margin-top: 2rem;
+      animation: fadeUp 0.7s ease 0.2s both;
+    }
+
+    .section-title {
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 0.9rem;
+    }
+
+    .samples-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+    }
+
+    @media (max-width: 480px) {
+      .samples-grid { grid-template-columns: 1fr; }
+    }
+
+    .sample-pill {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.6rem 0.85rem;
+      font-size: 0.78rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: left;
+      line-height: 1.4;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .sample-pill:hover {
+      border-color: var(--accent);
+      color: var(--text);
+      background: var(--surface2);
+      transform: translateY(-1px);
+    }
+
+    .sample-pill .pill-badge {
+      font-size: 0.62rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      border-radius: 4px;
+      padding: 1px 5px;
+      white-space: nowrap;
+      margin-top: 1px;
+      flex-shrink: 0;
+    }
+
+    .pill-badge.s { background: rgba(255,62,108,0.15); color: var(--accent); }
+    .pill-badge.h { background: rgba(0,229,160,0.12);  color: var(--accent2); }
+
+    /* ================================================
+       Stats Bar
+       ================================================ */
+    .stats-bar {
+      display: flex;
+      gap: 1px;
+      background: var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-bottom: 2rem;
+      animation: fadeUp 0.6s ease 0.05s both;
+    }
+
+    .stat-item {
+      flex: 1;
+      background: var(--surface);
+      padding: 0.85rem 0.5rem;
+      text-align: center;
+    }
+
+    .stat-val {
+      font-family: 'Space Mono', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      color: var(--text);
+      display: block;
+    }
+
+    .stat-lbl {
+      font-size: 0.65rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    /* ================================================
+       Footer
+       ================================================ */
+    footer {
+      margin-top: 3rem;
+      text-align: center;
+      font-size: 0.73rem;
+      color: var(--muted);
+      font-family: 'Space Mono', monospace;
+      animation: fadeUp 0.7s ease 0.3s both;
+    }
+
+    footer a { color: var(--accent2); text-decoration: none; }
+
+    /* ================================================
+       Keyframes
+       ================================================ */
+    @keyframes fadeDown {
+      from { opacity: 0; transform: translateY(-20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes popIn {
+      from { opacity: 0; transform: scale(0.92); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- ======== HEADER ======== -->
+  <header>
+    <div class="logo-badge">AI Powered · Naive Bayes + TF-IDF</div>
+    <h1>Spam<span class="highlight">Shield</span></h1>
+    <p class="subtitle">Paste any SMS or email snippet — get instant spam detection</p>
+    {% if accuracy and accuracy != "N/A" %}
+    <div class="accuracy-chip">
+      ⚡ Model Accuracy: <strong>{{ accuracy }}%</strong>
+    </div>
+    {% endif %}
+  </header>
+
+  <!-- ======== STATS BAR ======== -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-val">NB</span>
+      <span class="stat-lbl">Algorithm</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val">TF-IDF</span>
+      <span class="stat-lbl">Vectorizer</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val">3K</span>
+      <span class="stat-lbl">Features</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-val">~ms</span>
+      <span class="stat-lbl">Response</span>
+    </div>
+  </div>
+
+  <!-- ======== MAIN CARD ======== -->
+  <div class="card">
+    <div class="input-label">
+      <span>Message to Analyze</span>
+      <span class="char-count" id="charCount">0 / 500</span>
+    </div>
+
+    <textarea
+      id="messageInput"
+      placeholder="Paste an SMS, email, or any message here…&#10;&#10;e.g. 'Congratulations! You've won a £1000 prize. Call now!'"
+      maxlength="500"
+    ></textarea>
+
+    <div class="btn-row">
+      <button class="btn-check" id="checkBtn" onclick="checkSpam()">
+        <span class="btn-text">🔍 &nbsp;Check for Spam</span>
+        <div class="spinner"></div>
+      </button>
+      <button class="btn-clear" onclick="clearAll()">Clear</button>
+    </div>
+
+    <!-- Result Panel (hidden initially) -->
+    <div class="result-panel" id="resultPanel">
+      <div class="result-header">
+        <span class="result-icon" id="resultIcon"></span>
+        <span class="result-verdict" id="resultVerdict"></span>
+      </div>
+
+      <div class="confidence-section" id="confSection">
+        <div class="conf-label">
+          <span id="confLabelText">Confidence</span>
+          <span id="confPct"></span>
+        </div>
+        <div class="conf-bar-track">
+          <div class="conf-bar-fill" id="confBar"></div>
+        </div>
+      </div>
+
+      <div class="prob-row">
+        <div class="prob-chip spam-chip">
+          <span class="prob-val" id="spamPct">—</span>
+          <span class="prob-lbl">Spam Score</span>
+        </div>
+        <div class="prob-chip ham-chip">
+          <span class="prob-val" id="hamPct">—</span>
+          <span class="prob-lbl">Safe Score</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== SAMPLE MESSAGES ======== -->
+  <div class="samples-section">
+    <p class="section-title">Try a sample message</p>
+    <div class="samples-grid">
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge s">SPAM</span>
+        Congratulations! You've won a £1,000 Walmart gift card. Claim now at bit.ly/win
+      </button>
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge h">HAM</span>
+        Hey! Running 10 mins late to the meeting, start without me
+      </button>
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge s">SPAM</span>
+        URGENT: Your bank account suspended. Click here to reactivate immediately!
+      </button>
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge h">HAM</span>
+        Can you pick up some milk and eggs on the way home? Thanks!
+      </button>
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge s">SPAM</span>
+        FREE entry to win FA Cup final tickets. Text WIN to 85069 now!
+      </button>
+      <button class="sample-pill" onclick="loadSample(this)">
+        <span class="pill-badge h">HAM</span>
+        Your Amazon order has shipped and will arrive tomorrow by 8pm
+      </button>
+    </div>
+  </div>
+
+  <!-- ======== FOOTER ======== -->
+  <footer>
+    Built with Flask · scikit-learn · Naive Bayes + TF-IDF<br>
+    <span style="opacity:0.5">A beginner-friendly ML project</span>
+  </footer>
+
+</div><!-- /container -->
+
+<script>
+  // =====================================================
+  // JavaScript — Frontend logic
+  // Form submit, result display, sample messages
+  // =====================================================
+
+  const textarea   = document.getElementById('messageInput');
+  const charCount  = document.getElementById('charCount');
+  const checkBtn   = document.getElementById('checkBtn');
+  const resultPanel= document.getElementById('resultPanel');
+
+  // Character counter update karo
+  textarea.addEventListener('input', () => {
+    const len = textarea.value.length;
+    charCount.textContent = `${len} / 500`;
+    charCount.style.color = len > 450 ? '#ff3e6c' : '';
+  });
+
+  // Enter key se submit karo (Shift+Enter for newline)
+  textarea.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      checkSpam();
+    }
+  });
+
+  // -----------------------------------------------
+  // checkSpam() — Main function jo prediction leti hai
+  // -----------------------------------------------
+  async function checkSpam() {
+    const message = textarea.value.trim();
+    if (!message) {
+      textarea.focus();
+      textarea.style.borderColor = '#ff3e6c';
+      setTimeout(() => textarea.style.borderColor = '', 1000);
+      return;
+    }
+
+    // Loading state
+    checkBtn.classList.add('loading');
+    resultPanel.style.display = 'none';
+
+    try {
+      // Flask backend ko POST request bhejo
+      const formData = new FormData();
+      formData.append('message', message);
+
+      const response = await fetch('http://127.0.0.1:5000/predict', {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await response.json();
+      showResult(data);
+
+    } catch (err) {
+      showResult({ result: 'error', label: '⚠️ Server Error', confidence: 0 });
+    } finally {
+      checkBtn.classList.remove('loading');
+    }
+  }
+
+  // -----------------------------------------------
+  // showResult() — Result panel update karo
+  // -----------------------------------------------
+  function showResult(data) {
+    const panel   = resultPanel;
+    const icon    = document.getElementById('resultIcon');
+    const verdict = document.getElementById('resultVerdict');
+    const confBar = document.getElementById('confBar');
+    const confPct = document.getElementById('confPct');
+    const spamPct = document.getElementById('spamPct');
+    const hamPct  = document.getElementById('hamPct');
+
+    // Panel class reset karo
+    panel.className = 'result-panel';
+
+    if (data.result === 'spam') {
+      panel.classList.add('spam');
+      icon.textContent    = '🚫';
+      verdict.textContent = 'SPAM DETECTED';
+    } else if (data.result === 'ham') {
+      panel.classList.add('ham');
+      icon.textContent    = '✅';
+      verdict.textContent = 'Safe Message';
+    } else {
+      panel.classList.add('error');
+      icon.textContent    = '⚠️';
+      verdict.textContent = data.label || 'Error';
+    }
+
+    // Confidence bar animate karo
+    confPct.textContent = `${data.confidence || 0}%`;
+    confBar.style.width = '0%';
+    panel.style.display = 'block';
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        confBar.style.width = `${data.confidence || 0}%`;
+      }, 50);
+    });
+
+    // Probability chips
+    spamPct.textContent = data.spam_probability ? `${data.spam_probability}%` : '—';
+    hamPct.textContent  = data.ham_probability  ? `${data.ham_probability}%`  : '—';
+  }
+
+  // -----------------------------------------------
+  // clearAll() — Sab clear karo
+  // -----------------------------------------------
+  function clearAll() {
+    textarea.value = '';
+    charCount.textContent = '0 / 500';
+    resultPanel.style.display = 'none';
+    textarea.focus();
+  }
+
+  // -----------------------------------------------
+  // loadSample() — Sample message load karo
+  // -----------------------------------------------
+  function loadSample(btn) {
+    // Badge text ke baad waala message lo
+    const fullText = btn.innerText.trim();
+    const badge    = btn.querySelector('.pill-badge').innerText;
+    // Badge hata ke sirf message lo
+    const msg = fullText.replace(badge, '').trim();
+
+    textarea.value = msg;
+    charCount.textContent = `${msg.length} / 500`;
+
+    // Smooth scroll aur auto-check
+    textarea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setTimeout(checkSpam, 300);
+  }
+</script>
+</body>
+</html>
