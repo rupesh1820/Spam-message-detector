@@ -3,22 +3,30 @@ import re
 import pickle
 from flask import Flask, render_template, request, jsonify
 
-app = Flask(__name__, template_folder='.')
+# IMPORTANT: templates folder use karo (recommended)
+app = Flask(__name__, template_folder='templates')
 
 MODEL_PATH = os.path.join('model', 'model.pkl')
 VECTORIZER_PATH = os.path.join('model', 'vectorizer.pkl')
+ACCURACY_PATH = os.path.join('model', 'accuracy.txt')
 
 # ---------------- LOAD MODEL ----------------
 def load_model():
-    if not os.path.exists(MODEL_PATH):
-        print("Training model...")
-        from train_model import train_and_save_model
-        train_and_save_model()
+    try:
+        if not os.path.exists(MODEL_PATH) or not os.path.exists(VECTORIZER_PATH):
+            print("Training model...")
+            from train_model import train_and_save_model
+            train_and_save_model()
 
-    model = pickle.load(open(MODEL_PATH, 'rb'))
-    vectorizer = pickle.load(open(VECTORIZER_PATH, 'rb'))
+        model = pickle.load(open(MODEL_PATH, 'rb'))
+        vectorizer = pickle.load(open(VECTORIZER_PATH, 'rb'))
 
-    return model, vectorizer
+        print("Model loaded successfully")
+        return model, vectorizer
+
+    except Exception as e:
+        print("MODEL LOAD ERROR:", e)
+        raise e
 
 model, vectorizer = load_model()
 
@@ -34,9 +42,8 @@ def clean_text(text):
 @app.route('/')
 def home():
     accuracy = None
-    accuracy_file = os.path.join('model', 'accuracy.txt')
-    if os.path.exists(accuracy_file):
-        with open(accuracy_file, 'r') as f:
+    if os.path.exists(ACCURACY_PATH):
+        with open(ACCURACY_PATH, 'r') as f:
             accuracy = f.read().strip()
     return render_template('index.html', accuracy=accuracy)
 
@@ -70,9 +77,10 @@ def predict():
         })
 
     except Exception as e:
-        print("ERROR:", e)
+        print("PREDICT ERROR:", e)
         return jsonify({'result': 'error', 'confidence': 0})
 
-# ---------------- RUN ----------------
+# ---------------- RUN (IMPORTANT FOR DEPLOY) ----------------
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))   # Render/Railway ke liye
+    app.run(host='0.0.0.0', port=port)
